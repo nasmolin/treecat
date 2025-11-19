@@ -75,17 +75,14 @@ def is_binary_by_extension(path: Path) -> bool:
 
 def write_files_contents(base_dir: Path, out):
     for root, dirs, files in os.walk(base_dir):
-        # отфильтровываем директории, которые не хотим обходить
         dirs[:] = [d for d in dirs if d not in DIRS_EXCLUDE]
 
-        # Для стабильного вывода
         dirs.sort()
         files.sort()
 
         for name in files:
             full_path = Path(root) / name
 
-            # Пропускаем явно бинарные по расширению
             if is_binary_by_extension(full_path):
                 continue
 
@@ -96,14 +93,12 @@ def write_files_contents(base_dir: Path, out):
             out.write(f"{display_path}:\n")
 
             try:
-                # Пытаемся читать как UTF-8
                 with open(full_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 out.write(content)
                 if not content.endswith("\n"):
                     out.write("\n")
             except UnicodeDecodeError:
-                # Файл оказался бинарным / другой кодировки — не выводим содержимое
                 out.write("[binary or non-utf8 file skipped]\n")
             except Exception as e:
                 out.write(f"[ERROR READING FILE: {e}]\n")
@@ -112,7 +107,6 @@ def write_files_contents(base_dir: Path, out):
 def main():
     base_dir = Path(".").resolve()
 
-    # Создаём временный файл
     tmp_file = tempfile.NamedTemporaryFile(
         mode="w",
         delete=False,
@@ -123,16 +117,13 @@ def main():
 
     try:
         with tmp_file as out:
-            # 1. Вывод tree
             tree_output = get_tree_output()
             out.write(tree_output)
             if not tree_output.endswith("\n"):
                 out.write("\n")
 
-            # Разделитель
             out.write("\n")
 
-            # 2. Содержимое файлов (с фильтрами)
             write_files_contents(base_dir, out)
 
         print(f"смотри файл {tmp_file.name}")
