@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""
+Скрипт:
+1) сохраняет вывод `tree` для текущего каталога;
+2) добавляет содержимое файлов (рекурсивно из текущей папки), при этом:
+   - пропускает служебные директории (.git, node_modules, __pycache__ и т.п.);
+   - не выводит содержимое бинарных файлов.
+3) пишет всё это во временный файл и выводит путь к нему.
+"""
+
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+# Директории, которые точно не хотим обходить
+DIRS_EXCLUDE = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".idea",
+    ".vscode",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".terragrunt-cache",
+    ".terraform",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    ".gradle",
+}
+
+# Расширения файлов, которые считаем бинарными/неинтересными для вывода содержимого
+BINARY_EXTENSIONS = {
+    # байткод / объектники / библиотеки
+    ".pyc", ".pyo", ".pyd", ".o", ".so", ".dll", ".dylib",
+    ".class", ".jar",
+    # архивы
+    ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z",
+    # образы, исполняемые и т.п.
+    ".exe", ".bin", ".iso", ".apk",
+    # картинки
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".icns", ".webp",
+    # видео / аудио
+    ".mp4", ".mkv", ".avi", ".mov", ".webm", ".mp3", ".flac", ".wav",
+    # pdf и прочие бинарные форматы документов
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+}
+
+
+def get_tree_output() -> str:
+    try:
+        result = subprocess.run(
+            ["tree"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout
+    except FileNotFoundError:
+        # Если tree не установлен — пишем понятное сообщение
+        return (
+            "Команда `tree` не найдена.\n"
+            "Установите её, например: brew install tree\n"
+        )
+    except subprocess.CalledProcessError as e:
+        return f"Ошибка при выполнении `tree`: {e}\n{e.stdout}\n{e.stderr}\n"
+
+
+def is_binary_by_extension(path: Path) -> bool:
+    return path.suffix.lower() in BINARY_EXTENSIONS
+
+
+def write_files_contents(base_dir: Path, out):
+    for root, dirs, files in os.walk(base_dir):
+        # отфильтровываем директории, которые не хотим обходить
+        dirs[:] = [d for d in dirs if d not in DIRS_EXCLUDE]
+
+        # Для стабильного вывода
+        dirs.sort()
+        files.sort()
+
+        for name in files:
+            full_path = Path(root) / name
+
+            # Пропускаем явно бинарные по расширению
+            if is_binary_by_extension(full_path):
+                continue
+
+            rel_path = full_path.relative_to(base_dir)
+            display_path = f"./{rel_path}"
+
+            out.write("---\n")
+            out.write(f"{display_path}:\n")
+
+            try:
+                # Пытаемся читать как UTF-8
+                with open(full_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                out.write(content)
+                if not content.endswith("\n"):
+                    out.write("\n")
+            except UnicodeDecodeError:
+                # Файл оказался бинарным / другой кодировки — не выводим содержимое
+                out.write("[binary or non-utf8 file skipped]\n")
+            except Exception as e:
+                out.write(f"[ERROR READING FILE: {e}]\n")
+
+
+def main():
+    base_dir = Path(".").resolve()
+
+    # Создаём временный файл
+    tmp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        delete=False,
+        prefix="treecat_",
+        suffix=".out",
+        dir="/tmp",
+    )
+
+    try:
+        with tmp_file as out:
+            # 1. Вывод tree
+            tree_output = get_tree_output()
+            out.write(tree_output)
+            if not tree_output.endswith("\n"):
+                out.write("\n")
+
+            # Разделитель
+            out.write("\n")
+
+            # 2. Содержимое файлов (с фильтрами)
+            write_files_contents(base_dir, out)
+
+        print(f"смотри файл {tmp_file.name}")
+    except Exception as e:
+        print(f"Ошибка выполнения скрипта: {e}")
+
+
+if __name__ == "__main__":
+    main()
+
