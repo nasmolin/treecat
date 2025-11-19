@@ -14,7 +14,6 @@ import tempfile
 from pathlib import Path
 
 
-# Директории, которые точно не хотим обходить
 DIRS_EXCLUDE = {
     ".git",
     ".hg",
@@ -35,7 +34,6 @@ DIRS_EXCLUDE = {
     ".gradle",
 }
 
-# Расширения файлов, которые считаем бинарными/неинтересными для вывода содержимого
 BINARY_EXTENSIONS = {
     # байткод / объектники / библиотеки
     ".pyc", ".pyo", ".pyd", ".o", ".so", ".dll", ".dylib",
@@ -63,7 +61,6 @@ def get_tree_output() -> str:
         )
         return result.stdout
     except FileNotFoundError:
-        # Если tree не установлен — пишем понятное сообщение
         return (
             "Команда `tree` не найдена.\n"
             "Установите её, например: brew install tree\n"
